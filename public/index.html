@@ -13,7 +13,16 @@
   <body>
     <main class="app-shell">
       <header class="topbar">
-        <div>
+        <button
+          id="levels-toggle"
+          class="levels-toggle"
+          type="button"
+          aria-label="Уровни"
+          aria-controls="level-drawer"
+        >
+          ☰
+        </button>
+        <div class="topbar-title">
           <p class="eyebrow">PARKING PUZZLE</p>
           <h1>Освободи выезд</h1>
         </div>
@@ -24,7 +33,7 @@
       </header>
 
       <section class="game-layout">
-        <aside class="panel level-panel">
+        <aside id="level-drawer" class="panel level-panel">
           <div class="panel-heading">
             <h2>Уровни</h2>
             <span id="tier-label" class="tier-badge">—</span>
@@ -91,17 +100,20 @@
         </aside>
       </section>
     </main>
+    <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
     <div id="win-dialog" class="dialog-backdrop" hidden>
       <div class="dialog">
         <div class="win-mark">✓</div>
         <p class="eyebrow">УРОВЕНЬ ПРОЙДЕН</p>
         <h2>Выезд свободен!</h2>
+        <div id="win-stars" class="stars stars-lg" aria-hidden="true"></div>
         <p id="win-summary"></p>
         <button id="dialog-next" class="button primary" type="button">
           Следующий уровень →
         </button>
       </div>
     </div>
+    <canvas id="confetti" class="confetti-layer" aria-hidden="true"></canvas>
     <script src="game.js"></script>
     <script src="app.js"></script>
   </body>

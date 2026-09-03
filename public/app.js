@@ -6,6 +6,16 @@
     hard: "сложная",
     expert: "эксперт",
   };
+  const palette = [
+    "#4f7cff",
+    "#7c5cff",
+    "#2bb673",
+    "#f2a93b",
+    "#3fb8c9",
+    "#c97b3b",
+    "#5aa6ff",
+    "#e35fa0",
+  ];
   const state = {
     packs: [],
     packId: null,
@@ -14,11 +24,160 @@
     game: null,
     selected: -1,
     drag: null,
+    anim: null,
   };
   let packRequest = 0;
   const $ = (id) => document.getElementById(id);
   const canvas = $("board");
   const ctx = canvas.getContext("2d");
+
+  function shade(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    const clamp = (v) => Math.max(0, Math.min(255, v));
+    const r = clamp((n >> 16) + amount);
+    const g = clamp(((n >> 8) & 0xff) + amount);
+    const b = clamp((n & 0xff) + amount);
+    return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+  }
+
+  function wheelPair(cx, h) {
+    return `
+      <g>
+        <rect x="${cx - 10}" y="3" width="20" height="18" rx="7" fill="#151a1d"/>
+        <rect x="${cx - 10}" y="${h - 21}" width="20" height="18" rx="7" fill="#151a1d"/>
+        <rect x="${cx - 5}" y="5" width="10" height="14" rx="4" fill="#66757c"/>
+        <rect x="${cx - 5}" y="${h - 19}" width="10" height="14" rx="4" fill="#66757c"/>
+        <path d="M${cx - 3} 7h6 M${cx - 3} ${h - 7}h6" stroke="#aeb9bd" stroke-width="2" stroke-linecap="round"/>
+      </g>`;
+  }
+
+  function buildCarSprite(length, color, isTarget) {
+    const w = length * 100;
+    const h = 100;
+    const bodyColor = isTarget ? "#ff2f1f" : color;
+    const bodyDark = isTarget ? "#a9170d" : shade(color, -38);
+    const bodyMid = isTarget ? "#e92416" : shade(color, -10);
+    const bodyLight = isTarget ? "#ff7669" : shade(color, 36);
+    const id = `car${length}${isTarget ? "t" : color.slice(1)}`;
+    const cabinW = Math.min(94, w * 0.48);
+    const cabinX = w * 0.53 - cabinW / 2;
+    const wheelX = [w * 0.22, w * 0.78];
+    const wheels = wheelX.map((cx) => wheelPair(cx, h)).join("");
+    const rearGlassX = cabinX + 8;
+    const frontGlassX = cabinX + cabinW - 29;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">
+      <defs>
+        <linearGradient id="${id}-body" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0" stop-color="${bodyLight}"/>
+          <stop offset="0.18" stop-color="${bodyColor}"/>
+          <stop offset="0.74" stop-color="${bodyMid}"/>
+          <stop offset="1" stop-color="${bodyDark}"/>
+        </linearGradient>
+        <linearGradient id="${id}-glass" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0" stop-color="#e7fbff"/>
+          <stop offset="0.42" stop-color="#8ec8d5"/>
+          <stop offset="1" stop-color="#315a67"/>
+        </linearGradient>
+        <linearGradient id="${id}-lamp" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0" stop-color="#ffc83d"/>
+          <stop offset="1" stop-color="#fff9c9"/>
+        </linearGradient>
+      </defs>
+      ${wheels}
+      <rect x="7" y="12" width="${w - 14}" height="${h - 24}" rx="28" fill="url(#${id}-body)" stroke="${bodyDark}" stroke-width="3"/>
+      <path d="M19 17 Q${w / 2} 5 ${w - 25} 17" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".45"/>
+      <path d="M18 82 Q${w / 2} 92 ${w - 24} 82" fill="none" stroke="#101a1e" stroke-width="3" stroke-linecap="round" opacity=".22"/>
+
+      <rect x="${cabinX}" y="14" width="${cabinW}" height="72" rx="20" fill="${bodyDark}" opacity=".88"/>
+      <path d="M${rearGlassX + 18} 18 H${frontGlassX - 3} V43 H${rearGlassX} Z" fill="url(#${id}-glass)" stroke="#203a43" stroke-width="2"/>
+      <path d="M${rearGlassX} 57 H${frontGlassX - 3} V82 H${rearGlassX + 18} Z" fill="url(#${id}-glass)" stroke="#203a43" stroke-width="2"/>
+      <path d="M${frontGlassX} 18 L${cabinX + cabinW - 8} 27 V73 L${frontGlassX} 82 Z" fill="url(#${id}-glass)" stroke="#203a43" stroke-width="2"/>
+      <path d="M${rearGlassX} 18 L${rearGlassX + 16} 25 V75 L${rearGlassX} 82 Z" fill="#6ca7b5" stroke="#203a43" stroke-width="2"/>
+      <rect x="${rearGlassX + 19}" y="44" width="${cabinW - 55}" height="12" rx="6" fill="${bodyColor}"/>
+      <path d="M${rearGlassX + 22} 22 H${frontGlassX - 7}" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".42"/>
+
+      <path d="M${w - 16} 30v13 M${w - 16} 57v13" stroke="url(#${id}-lamp)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M16 31v12 M16 57v12" stroke="#ff756c" stroke-width="6" stroke-linecap="round"/>
+      <path d="M10 50h12 M${w - 22} 50h12" stroke="#dce4e4" stroke-width="3" stroke-linecap="round" opacity=".75"/>
+      <path d="M${cabinX + cabinW - 10} 20l9-5v12z M${cabinX + cabinW - 10} 80l9 5V73z" fill="${bodyDark}" stroke="#172126" stroke-width="1.5"/>
+    </svg>`;
+  }
+
+  function buildTruckSprite(length, color, isTarget) {
+    const w = length * 100;
+    const h = 100;
+    const cabColor = isTarget ? "#ff2f1f" : color;
+    const cabDark = isTarget ? "#a9170d" : shade(color, -38);
+    const cabLight = isTarget ? "#ff7669" : shade(color, 36);
+    const cargoColor = shade(color, 26);
+    const cargoDark = shade(color, -22);
+    const id = `truck${length}${isTarget ? "t" : color.slice(1)}`;
+    const cabW = 82;
+    const cabX = w - cabW - 7;
+    const cargoX = 8;
+    const cargoW = cabX - cargoX - 7;
+    const wheels = [cargoX + 30, cargoX + cargoW - 28, cabX + 53]
+      .map((cx) => wheelPair(cx, h))
+      .join("");
+    const ridges = [0.2, 0.4, 0.6, 0.8]
+      .map(
+        (t) =>
+          `<line x1="${cargoX + cargoW * t}" y1="22" x2="${cargoX + cargoW * t}" y2="${h - 22}" stroke="${cargoDark}" stroke-width="2" opacity=".35"/>`,
+      )
+      .join("");
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">
+      <defs>
+        <linearGradient id="${id}-cab" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0" stop-color="${cabLight}"/>
+          <stop offset="0.48" stop-color="${cabColor}"/>
+          <stop offset="1" stop-color="${cabDark}"/>
+        </linearGradient>
+        <linearGradient id="${id}-cargo" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0" stop-color="${shade(color, 46)}"/>
+          <stop offset="0.2" stop-color="${cargoColor}"/>
+          <stop offset="1" stop-color="${cargoDark}"/>
+        </linearGradient>
+        <linearGradient id="${id}-glass" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0" stop-color="#e7fbff"/>
+          <stop offset=".45" stop-color="#8ec8d5"/>
+          <stop offset="1" stop-color="#315a67"/>
+        </linearGradient>
+      </defs>
+      ${wheels}
+      <rect x="${cargoX}" y="17" width="${cargoW}" height="66" rx="9" fill="url(#${id}-cargo)" stroke="${cargoDark}" stroke-width="3"/>
+      ${ridges}
+      <path d="M${cargoX + 7} 23H${cargoX + cargoW - 7}" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".4"/>
+      <path d="M${cargoX + 7} 77H${cargoX + cargoW - 7}" stroke="#101a1e" stroke-width="3" stroke-linecap="round" opacity=".2"/>
+      <path d="M${cargoX + 5} 31v12 M${cargoX + 5} 57v12" stroke="#ff756c" stroke-width="6" stroke-linecap="round"/>
+
+      <path d="M${cabX} 16 Q${cabX} 10 ${cabX + 9} 10 H${w - 25} Q${w - 7} 20 ${w - 7} 37 V63 Q${w - 7} 80 ${w - 25} 90 H${cabX + 9} Q${cabX} 90 ${cabX} 84Z" fill="url(#${id}-cab)" stroke="${cabDark}" stroke-width="3"/>
+      <path d="M${cabX + 30} 17H${w - 27}Q${w - 15} 25 ${w - 14} 39H${cabX + 30}Z" fill="url(#${id}-glass)" stroke="#203a43" stroke-width="2"/>
+      <path d="M${cabX + 30} 61H${w - 14}Q${w - 15} 75 ${w - 27} 83H${cabX + 30}Z" fill="url(#${id}-glass)" stroke="#203a43" stroke-width="2"/>
+      <rect x="${cabX + 15}" y="43" width="${cabW - 27}" height="14" rx="6" fill="${cabColor}"/>
+      <path d="M${cabX + 36} 21H${w - 31}" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".42"/>
+      <path d="M${w - 12} 29v13 M${w - 12} 58v13" stroke="#fff0a6" stroke-width="7" stroke-linecap="round"/>
+      <path d="M${w - 31} 20l9-5v13z M${w - 31} 80l9 5V72z" fill="${cabDark}" stroke="#172126" stroke-width="1.5"/>
+      <path d="M${cabX - 3} 28v44" stroke="#cad5d5" stroke-width="3" opacity=".7"/>
+    </svg>`;
+  }
+
+  const spriteCache = new Map();
+  function getSprite(length, color, isTarget) {
+    const key = `${length}-${color}-${isTarget}`;
+    let entry = spriteCache.get(key);
+    if (!entry) {
+      const img = new Image();
+      entry = { img, ready: false };
+      img.onload = () => {
+        entry.ready = true;
+        draw();
+      };
+      const svg = length >= 3 ? buildTruckSprite(length, color, isTarget) : buildCarSprite(length, color, isTarget);
+      img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      spriteCache.set(key, entry);
+    }
+    return entry.ready ? entry.img : null;
+  }
 
   async function loadManifest() {
     const response = await fetch("levels/manifest.json", { cache: "no-store" });
@@ -34,16 +193,19 @@
     return response.json();
   }
 
-  const progressKey = () => `parking-puzzle-progress-v2:${state.packId}`;
+  const progressKey = () => `parking-puzzle-progress-v3:${state.packId}`;
+  const lastIndexKey = () => `parking-puzzle-last-index-v1:${state.packId}`;
   const level = () => state.levels[state.index];
 
   function resize() {
-    const rect = canvas.getBoundingClientRect();
-    const border = parseFloat(getComputedStyle(canvas).borderLeftWidth) || 0;
-    const width = rect.width - border * 2;
+    const wrap = canvas.parentElement;
+    const wrapRect = wrap.getBoundingClientRect();
+    const size = Math.max(120, Math.floor(Math.min(wrapRect.width, wrapRect.height)));
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(width * dpr);
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw();
   }
@@ -62,8 +224,9 @@
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#dce6e2";
     ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = "rgba(255,255,255,.35)";
+    ctx.strokeStyle = "rgba(255,255,255,.4)";
     ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
     for (let index = 1; index < 6; index++) {
       ctx.beginPath();
       ctx.moveTo(index * cell, 0);
@@ -72,12 +235,15 @@
       ctx.lineTo(width, index * cell);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
     if (!level()) return;
 
     const positions = state.game.positions;
     level().vehicles.forEach((vehicle, index) => {
       let position = positions[index];
       if (state.drag?.index === index) position = state.drag.position;
+      else if (state.anim?.index === index) position = state.anim.position;
+      const isTarget = index === level().target;
       const x =
         (vehicle.orientation === "horizontal" ? position : vehicle.fixed) *
           cell +
@@ -90,88 +256,87 @@
         (vehicle.orientation === "horizontal" ? vehicle.length : 1) * cell - 8;
       const vehicleHeight =
         (vehicle.orientation === "vertical" ? vehicle.length : 1) * cell - 8;
+      const color = isTarget ? "#ff2f1f" : palette[index % palette.length];
+      const sprite = getSprite(vehicle.length, color, isTarget);
       ctx.save();
-      roundedRect(x, y, vehicleWidth, vehicleHeight, 10);
-      const gradient = ctx.createLinearGradient(
-        x,
-        y,
-        x + vehicleWidth,
-        y + vehicleHeight,
-      );
-      if (index === level().target) {
-        gradient.addColorStop(0, "#ff8877");
-        gradient.addColorStop(1, "#d8483e");
+      ctx.shadowColor = isTarget ? "rgba(255,47,31,.5)" : "rgba(20,40,42,.3)";
+      ctx.shadowBlur = isTarget ? 13 : 9;
+      ctx.shadowOffsetY = 5;
+      if (sprite) {
+        const drawW = vehicle.orientation === "horizontal" ? vehicleWidth : vehicleHeight;
+        const drawH = vehicle.orientation === "horizontal" ? vehicleHeight : vehicleWidth;
+        ctx.translate(x + vehicleWidth / 2, y + vehicleHeight / 2);
+        if (vehicle.orientation === "vertical") ctx.rotate(Math.PI / 2);
+        ctx.drawImage(sprite, -drawW / 2, -drawH / 2, drawW, drawH);
       } else {
-        gradient.addColorStop(0, "#557277");
-        gradient.addColorStop(1, "#293f43");
+        roundedRect(x, y, vehicleWidth, vehicleHeight, 12);
+        ctx.fillStyle = color;
+        ctx.fill();
       }
-      ctx.fillStyle = gradient;
-      ctx.shadowColor =
-        index === level().target ? "rgba(201,68,59,.35)" : "rgba(20,40,42,.28)";
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetY = 4;
-      ctx.fill();
-      ctx.shadowColor = "transparent";
-      ctx.strokeStyle =
-        index === state.selected ? "#f6c85f" : "rgba(255,255,255,.16)";
-      ctx.lineWidth = index === state.selected ? 3 : 1;
-      ctx.stroke();
-      ctx.fillStyle = "rgba(210,240,236,.62)";
-      const windowWidth =
-        vehicle.orientation === "horizontal"
-          ? vehicleWidth * 0.42
-          : vehicleWidth * 0.28;
-      const windowHeight =
-        vehicle.orientation === "horizontal"
-          ? vehicleHeight * 0.28
-          : vehicleHeight * 0.42;
-      roundedRect(
-        x + (vehicleWidth - windowWidth) / 2,
-        y + (vehicleHeight - windowHeight) / 2,
-        windowWidth,
-        windowHeight,
-        3,
-      );
-      ctx.fill();
-      ctx.fillStyle = "#ffffffaa";
-      ctx.font = "700 12px system-ui";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(
-        index === level().target ? "T" : String.fromCharCode(65 + index),
-        x + vehicleWidth / 2,
-        y + vehicleHeight / 2,
-      );
       ctx.restore();
+      if (index === state.selected) {
+        ctx.save();
+        roundedRect(x, y, vehicleWidth, vehicleHeight, 12);
+        ctx.strokeStyle = "#f6c85f";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+      }
     });
 
     const target = level().vehicles[level().target];
     const exitY = (target.fixed + 0.5) * cell;
-    ctx.fillStyle = "#c9443b";
-    ctx.font = "900 14px system-ui";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    ctx.fillText("→", width - 3, exitY);
+    ctx.strokeStyle = "#2b9d91";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    [0, 11].forEach((offset) => {
+      ctx.beginPath();
+      ctx.moveTo(width - 24 + offset, exitY - 9);
+      ctx.lineTo(width - 12 + offset, exitY);
+      ctx.lineTo(width - 24 + offset, exitY + 9);
+      ctx.stroke();
+    });
   }
 
-  function completedLevelIDs() {
+  function progressMap() {
     try {
-      const value = JSON.parse(localStorage.getItem(progressKey()) || "[]");
-      return Array.isArray(value) ? value : [];
+      const value = JSON.parse(localStorage.getItem(progressKey()) || "{}");
+      return value && typeof value === "object" && !Array.isArray(value) ? value : {};
     } catch {
-      return [];
+      return {};
     }
   }
 
   function isComplete(index) {
-    return completedLevelIDs().includes(state.levels[index].id);
+    return Boolean(progressMap()[state.levels[index].id]);
+  }
+
+  function levelResult(index) {
+    return progressMap()[state.levels[index].id] || null;
+  }
+
+  function computeStars(moves, optimalMoves) {
+    if (!optimalMoves) return 3;
+    if (moves <= optimalMoves) return 3;
+    if (moves <= optimalMoves + Math.max(2, Math.ceil(optimalMoves * 0.5))) return 2;
+    return 1;
   }
 
   function markComplete() {
-    const completed = completedLevelIDs();
+    const data = progressMap();
     const id = level().id;
-    if (!completed.includes(id)) completed.push(id);
-    localStorage.setItem(progressKey(), JSON.stringify(completed));
+    const optimal = level().analysis?.metrics?.optimalMoves;
+    const moves = state.game.moves;
+    const stars = computeStars(moves, optimal);
+    const previous = data[id];
+    if (!previous || moves < previous.moves) data[id] = { moves, stars };
+    else if (stars > previous.stars) previous.stars = stars;
+    localStorage.setItem(progressKey(), JSON.stringify(data));
+    return data[id].stars;
+  }
+
+  function starGlyphs(count) {
+    return "★".repeat(count) + `<span class="dim">${"★".repeat(3 - count)}</span>`;
   }
 
   function renderLevels() {
@@ -184,10 +349,13 @@
       const check = document.createElement("span");
       button.className = `level-button ${done ? "done" : ""}`;
       number.textContent = index + 1;
-      check.className = "check";
-      check.textContent = done ? "✓" : "";
+      check.className = "check stars";
+      if (done) check.innerHTML = starGlyphs(levelResult(index).stars);
       button.append(number, check);
-      button.addEventListener("click", () => loadLevel(index));
+      button.addEventListener("click", () => {
+        loadLevel(index);
+        closeDrawer();
+      });
       list.append(button);
     });
   }
@@ -237,11 +405,21 @@
     return -1;
   }
 
+  function dragBounds(index) {
+    const start = state.game.positions[index];
+    let min = start;
+    while (state.game.canMove(index, min - 1)) min--;
+    let max = start;
+    while (state.game.canMove(index, max + 1)) max++;
+    return [min, max];
+  }
+
   function startDrag(event) {
     const [x, y] = pointerPosition(event);
     const index = hitTest(x, y);
     if (index < 0) return;
     const position = state.game.positions[index];
+    const [min, max] = dragBounds(index);
     state.selected = index;
     canvas.focus();
     state.drag = {
@@ -250,6 +428,8 @@
       startY: y,
       startPosition: position,
       position,
+      min,
+      max,
     };
     canvas.setPointerCapture(event.pointerId);
     draw();
@@ -259,18 +439,12 @@
     if (!state.drag) return;
     const [x, y] = pointerPosition(event);
     const vehicle = level().vehicles[state.drag.index];
-    const delta = Math.round(
+    const delta =
       vehicle.orientation === "horizontal"
         ? x - state.drag.startX
-        : y - state.drag.startY,
-    );
+        : y - state.drag.startY;
     const candidate = state.drag.startPosition + delta;
-    if (
-      candidate === state.drag.startPosition ||
-      state.game.canMove(state.drag.index, candidate)
-    ) {
-      state.drag.position = candidate;
-    }
+    state.drag.position = Math.min(state.drag.max, Math.max(state.drag.min, candidate));
     draw();
   }
 
@@ -280,14 +454,38 @@
     state.drag = null;
     if (canvas.hasPointerCapture(event.pointerId))
       canvas.releasePointerCapture(event.pointerId);
-    if (drag.position !== drag.startPosition) commit(drag.index, drag.position);
+    const target = Math.round(drag.position);
+    if (target !== drag.startPosition) commit(drag.index, target, { from: drag.position });
     else draw();
   }
 
-  function commit(index, position) {
+  function animateMove(index, from, to, onDone) {
+    const duration = 140;
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      state.anim = { index, position: from + (to - from) * eased };
+      draw();
+      if (t < 1) requestAnimationFrame(step);
+      else {
+        state.anim = null;
+        draw();
+        onDone?.();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function commit(index, position, { from } = {}) {
+    const start = from ?? state.game.positions[index];
     if (!state.game.move(index, position)) return;
     render();
-    if (state.game.isSolved()) win();
+    const finish = () => {
+      if (state.game.isSolved()) win();
+    };
+    if (start !== position) animateMove(index, start, position, finish);
+    else finish();
   }
 
   function keyMove(event) {
@@ -321,14 +519,57 @@
     render();
   }
 
+  function confettiBurst() {
+    const layer = $("confetti");
+    const ctx2d = layer.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    layer.width = window.innerWidth * dpr;
+    layer.height = window.innerHeight * dpr;
+    ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const colors = ["#ed5b4f", "#2b9d91", "#f6c85f", "#4f7cff", "#7c5cff", "#2bb673"];
+    const particles = Array.from({ length: 80 }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: -20 - Math.random() * window.innerHeight * 0.4,
+      w: 5 + Math.random() * 5,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vy: 2.5 + Math.random() * 3,
+      vx: (Math.random() - 0.5) * 2.4,
+      rot: Math.random() * 360,
+      vr: (Math.random() - 0.5) * 12,
+    }));
+    const start = performance.now();
+    function frame(now) {
+      const elapsed = now - start;
+      ctx2d.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        ctx2d.save();
+        ctx2d.translate(p.x, p.y);
+        ctx2d.rotate((p.rot * Math.PI) / 180);
+        ctx2d.fillStyle = p.color;
+        ctx2d.fillRect(-p.w / 2, -p.w / 4, p.w, p.w / 2);
+        ctx2d.restore();
+      });
+      if (elapsed < 1500) requestAnimationFrame(frame);
+      else ctx2d.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    }
+    requestAnimationFrame(frame);
+  }
+
   function win() {
-    markComplete();
+    const stars = markComplete();
     renderLevels();
     render();
-    $("win-summary").textContent =
-      `Уровень пройден за ${state.game.moves} ход${state.game.moves === 1 ? "" : "ов"}.`;
+    const optimal = level().analysis?.metrics?.optimalMoves;
+    $("win-stars").innerHTML = starGlyphs(stars);
+    $("win-summary").textContent = optimal
+      ? `Уровень пройден за ${state.game.moves} ход${state.game.moves === 1 ? "" : "ов"} (оптимально: ${optimal}).`
+      : `Уровень пройден за ${state.game.moves} ход${state.game.moves === 1 ? "" : "ов"}.`;
     $("dialog-next").disabled = state.index >= state.levels.length - 1;
     $("win-dialog").hidden = false;
+    confettiBurst();
   }
 
   function loadLevel(index) {
@@ -336,7 +577,9 @@
     state.game = window.ParkingGame.createGame(level());
     state.selected = -1;
     state.drag = null;
+    state.anim = null;
     $("win-dialog").hidden = true;
+    localStorage.setItem(lastIndexKey(), String(index));
     render();
   }
 
@@ -369,11 +612,26 @@
       clearError();
       renderPackOptions();
       renderLevels();
-      loadLevel(0);
+      const savedIndex = Number.parseInt(localStorage.getItem(lastIndexKey()), 10);
+      const startIndex =
+        Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < levels.length
+          ? savedIndex
+          : 0;
+      loadLevel(startIndex);
     } catch (error) {
       if (request !== packRequest) return;
       throw error;
     }
+  }
+
+  function openDrawer() {
+    $("level-drawer").classList.add("open");
+    $("drawer-backdrop").hidden = false;
+  }
+
+  function closeDrawer() {
+    $("level-drawer").classList.remove("open");
+    $("drawer-backdrop").hidden = true;
   }
 
   function initTelegram() {
@@ -439,6 +697,8 @@
       $("undo").addEventListener("click", undo);
       $("next").addEventListener("click", nextLevel);
       $("dialog-next").addEventListener("click", nextLevel);
+      $("levels-toggle").addEventListener("click", openDrawer);
+      $("drawer-backdrop").addEventListener("click", closeDrawer);
       resize();
     } catch (error) {
       reportError(error);

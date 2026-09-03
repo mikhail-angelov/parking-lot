@@ -48,3 +48,39 @@ allocated about 1.36 GB; the full Medium pack reported an ETA around 45 minutes.
 
 The fixed Medium benchmark is `BenchmarkGenerateMedium`; run it with
 `go test ./internal/generator -run '^$' -bench '^BenchmarkGenerateMedium$' -benchtime=1x -benchmem -count=1`.
+
+## 2026-09-03 — Preview generated SVG sprites with Quick Look
+
+### Goal
+
+Visually verify SVG sprites assembled as strings in `public/app.js` without a
+browser automation dependency.
+
+### Golden path
+
+1. Evaluate only the sprite-builder functions with Node and write their SVG
+   output to a directory created by `mktemp -d`.
+2. Render each SVG with `qlmanage -t -s 600 -o <preview-dir> <sprite.svg>`.
+3. Combine the PNGs into a contact sheet with ImageMagick when comparing
+   several colors or vehicle lengths.
+
+### Verification
+
+Quick Look rendered the body and glass gradients, lights, wheels, and outlines
+of both car and truck sprites correctly; the contact sheet was then inspected.
+
+### Failure pattern avoided
+
+ImageMagick's SVG renderer can display fills using local gradient references
+such as `url(#car2t-body)` as black, producing a misleading broken preview even
+when WebKit-compatible rendering is correct.
+
+### Ruled-out approaches
+
+- Tried rasterizing the generated SVGs directly with `magick`; both numeric and
+  percentage gradient coordinates still rendered referenced gradients black.
+
+### Notes
+
+This workflow uses macOS Quick Look and is intended for local visual checks;
+the application still renders the same SVG strings through the browser canvas.
