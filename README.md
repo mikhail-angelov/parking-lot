@@ -70,26 +70,20 @@ the Telegram WebApp SDK (`public/index.html` → `telegram-web-app.js`, theme an
 viewport handling in `public/app.js`), so the same static build works both in
 a browser and inside Telegram.
 
-### 1. Create the bot and the app (one time, in Telegram)
+**No bot code is required.** The menu button is a bot setting, so everything
+is configured once in BotFather — there is nothing to host.
 
-1. Open **@BotFather** → `/newbot` → choose a name and username (e.g. `ParkingPuzzleBot`). Save the token.
-2. In BotFather, open your bot → **Bot Settings → Menu Button** (or run `/setmenubutton`) → set type **Web App**, text `🎮 Играть`, URL `https://mikhail-angelov.github.io/parking-lot/`.
-3. Optionally register a proper Mini App entry: BotFather → your bot → **Bot Settings → App** (or `/newapp`) with the same URL. This makes the game appear in the bot's apps and lets the button open in full-screen mode.
+### Setup (one time, in Telegram)
 
-### 2. Run the bot
+1. Open **@BotFather** → `/newbot` → choose a name and username (e.g. `ParkingPuzzleBot`).
+2. BotFather → your bot → **Bot Settings → Menu Button** → type **Web App**, text `🎮 Играть`, URL `https://mikhail-angelov.github.io/parking-lot/`.
+3. (Recommended) BotFather → your bot → **Bot Settings → App** (or `/newapp`) with the same URL. This registers a proper Mini App: the game appears in the bot's apps list and opens full-screen.
 
-`cmd/bot` is a dependency-free long-polling bot: `/start` replies with a
-"Play" button and it sets the chat menu button automatically on boot.
+Done: open the bot in Telegram → tap 🎮 → the game opens full-screen.
+Difficulty packs load from the same GitHub Pages URL; progress is saved in
+the WebApp's local storage.
 
-```sh
-TELEGRAM_BOT_TOKEN=<token from BotFather> go run ./cmd/bot
-```
-
-Works behind NAT (outbound long polling only), no webhook or public IP needed.
-It restarts safely; use systemd or a process manager for permanent hosting.
-
-### 3. What the user sees
-
-Open the bot → tap 🎮 (menu button or inline button) → the game opens
-full-screen inside Telegram. Difficulty packs load from the same GitHub Pages
-URL; progress is saved in the WebApp's local storage.
+A small bot (`cmd/bot`, dependency-free long polling) was considered for
+`/start` greetings and menu-button setup, then dropped as unnecessary —
+git history keeps it if a welcome screen, leaderboards or per-level chat
+sharing ever become wanted.
