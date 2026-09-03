@@ -62,3 +62,34 @@ See the [project specification](docs/parking-puzzle-SPEC.md) for the full game m
 The `CI and GitHub Pages` workflow runs the tests on every push and pull request. After a successful push to `master`, it automatically deploys the contents of `public/` to GitHub Pages.
 
 Before the first deployment, select **Settings → Pages → Build and deployment → Source: GitHub Actions** in the repository settings.
+
+## Telegram Mini App
+
+The game runs inside Telegram as a WebApp. The frontend already integrates
+the Telegram WebApp SDK (`public/index.html` → `telegram-web-app.js`, theme and
+viewport handling in `public/app.js`), so the same static build works both in
+a browser and inside Telegram.
+
+### 1. Create the bot and the app (one time, in Telegram)
+
+1. Open **@BotFather** → `/newbot` → choose a name and username (e.g. `ParkingPuzzleBot`). Save the token.
+2. In BotFather, open your bot → **Bot Settings → Menu Button** (or run `/setmenubutton`) → set type **Web App**, text `🎮 Играть`, URL `https://mikhail-angelov.github.io/parking-lot/`.
+3. Optionally register a proper Mini App entry: BotFather → your bot → **Bot Settings → App** (or `/newapp`) with the same URL. This makes the game appear in the bot's apps and lets the button open in full-screen mode.
+
+### 2. Run the bot
+
+`cmd/bot` is a dependency-free long-polling bot: `/start` replies with a
+"Play" button and it sets the chat menu button automatically on boot.
+
+```sh
+TELEGRAM_BOT_TOKEN=<token from BotFather> go run ./cmd/bot
+```
+
+Works behind NAT (outbound long polling only), no webhook or public IP needed.
+It restarts safely; use systemd or a process manager for permanent hosting.
+
+### 3. What the user sees
+
+Open the bot → tap 🎮 (menu button or inline button) → the game opens
+full-screen inside Telegram. Difficulty packs load from the same GitHub Pages
+URL; progress is saved in the WebApp's local storage.
