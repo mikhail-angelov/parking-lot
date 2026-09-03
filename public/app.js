@@ -30,6 +30,12 @@
     anim: null,
   };
   let packRequest = 0;
+  let bootHidden = false;
+  function hideBoot() {
+    if (bootHidden) return;
+    bootHidden = true;
+    document.getElementById("boot-splash")?.remove();
+  }
   const $ = (id) => document.getElementById(id);
   const canvas = $("board");
   const ctx = canvas.getContext("2d");
@@ -621,9 +627,11 @@
       state.game = window.ParkingGame.createGame(levelData);
       localStorage.setItem(lastIndexKey(), String(index));
       clearError();
+      hideBoot();
       render();
     } catch (error) {
       if (seq !== levelSeq || packId !== state.packId) return;
+      hideBoot();
       reportError(error);
     }
   }
@@ -728,6 +736,8 @@
 
   async function init() {
     initTelegram();
+    // failsafe: never leave the user staring at the splash
+    setTimeout(hideBoot, 10000);
     try {
       state.packs = await loadManifest();
       if (!state.packs.length) throw new Error("Список пачек пуст");
