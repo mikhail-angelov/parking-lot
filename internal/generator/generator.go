@@ -12,6 +12,7 @@ import (
 	"sort"
 )
 
+// Config controls deterministic level generation.
 type Config struct {
 	Tier         analyzer.DifficultyTier
 	MinVehicles  int
@@ -22,6 +23,8 @@ type Config struct {
 	MaxMutations int
 	Seed         int64
 }
+
+// GeneratedLevel contains a level and its computed metadata.
 type GeneratedLevel struct {
 	Level    puzzle.Level
 	Analysis analyzer.Analysis
@@ -34,6 +37,7 @@ type evaluatedCandidate struct {
 	prepared  *engine.PreparedLevel
 }
 
+// Defaults returns generation settings calibrated for a difficulty tier.
 func Defaults(t analyzer.DifficultyTier) Config {
 	c := Config{Tier: t, MaxAttempts: 100, MaxMutations: 100}
 	switch t {
@@ -49,6 +53,10 @@ func Defaults(t analyzer.DifficultyTier) Config {
 	}
 	return c
 }
+
+// Generate searches deterministically for a level matching the configuration.
+//
+//nolint:gocyclo,nestif // The bounded search loop keeps generation state and acceptance decisions together.
 func Generate(c Config) (*GeneratedLevel, error) {
 	if c.Tier != analyzer.Easy && c.Tier != analyzer.Medium && c.Tier != analyzer.Hard && c.Tier != analyzer.Expert {
 		return nil, fmt.Errorf("invalid difficulty %q", c.Tier)
@@ -65,7 +73,7 @@ func Generate(c Config) (*GeneratedLevel, error) {
 	if c.MaxMutations < 0 {
 		return nil, fmt.Errorf("max mutations must be non-negative")
 	}
-	r := rand.New(rand.NewSource(c.Seed))
+	r := rand.New(rand.NewSource(c.Seed)) //nolint:gosec // Reproducible generation requires a deterministic PRNG.
 	bestScore := -1.0
 	bestTier := analyzer.DifficultyTier("")
 	var bestMetrics analyzer.Metrics
@@ -120,9 +128,10 @@ func Generate(c Config) (*GeneratedLevel, error) {
 			seenStates[k] = true
 			prev = m
 		}
-		if c.Tier == analyzer.Expert {
+		switch c.Tier {
+		case analyzer.Expert:
 			k = deepestState(p, l.InitialKey(), minInt(steps, 50), 2000000)
-		} else if c.Tier == analyzer.Hard {
+		case analyzer.Hard:
 			k = deepestState(p, l.InitialKey(), minInt(steps, 35), 500000)
 		}
 		l.Initial.Positions = decode(k, len(l.Vehicles))
@@ -194,11 +203,11 @@ func Generate(c Config) (*GeneratedLevel, error) {
 
 func evaluateCandidate(level puzzle.Level, seed int64, tier analyzer.DifficultyTier) (*evaluatedCandidate, error) {
 	if err := puzzle.ValidateLevel(level); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate candidate: %w", err)
 	}
 	prepared, err := engine.Prepare(level)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("prepare candidate: %w", err)
 	}
 	analysis := analyzer.AnalyzeForTier(prepared, analyzer.Config{}, tier)
 	return &evaluatedCandidate{
@@ -216,10 +225,10 @@ func randomStructuralMutation(l puzzle.Level, r *rand.Rand) (puzzle.Level, bool)
 	i := r.Intn(len(l.Vehicles))
 	v := candidate.Vehicles[i]
 	if i == int(l.Target) {
-		v.Fixed = uint8(1 + r.Intn(4))
+		v.Fixed = 1 + randomUint8(r, 4)
 		candidate.Vehicles[i] = v
 		ps := append([]uint8(nil), candidate.Initial.Positions...)
-		ps[i] = uint8(r.Intn(5))
+		ps[i] = randomUint8(r, 5)
 		candidate.Initial.Positions = ps
 		if validPositions(candidate, ps) {
 			return candidate, true
@@ -227,7 +236,7 @@ func randomStructuralMutation(l puzzle.Level, r *rand.Rand) (puzzle.Level, bool)
 		return l, false
 	}
 	if r.Intn(3) == 0 {
-		v.Orientation = puzzle.Orientation(r.Intn(2))
+		v.Orientation = puzzle.Orientation(randomUint8(r, 2))
 	}
 	if r.Intn(3) == 0 {
 		if v.Length == 2 {
@@ -236,10 +245,10 @@ func randomStructuralMutation(l puzzle.Level, r *rand.Rand) (puzzle.Level, bool)
 			v.Length = 2
 		}
 	}
-	v.Fixed = uint8(r.Intn(6))
+	v.Fixed = randomUint8(r, 6)
 	candidate.Vehicles[i] = v
 	ps := append([]uint8(nil), candidate.Initial.Positions...)
-	ps[i] = uint8(r.Intn(int(7 - v.Length)))
+	ps[i] = randomUint8(r, int(7-v.Length))
 	candidate.Initial.Positions = ps
 	if validPositions(candidate, ps) {
 		return candidate, true
@@ -251,14 +260,14 @@ func randomPositionMutation(l puzzle.Level, r *rand.Rand) (puzzle.StateKey, bool
 	for tries := 0; tries < 30; tries++ {
 		i := r.Intn(len(l.Vehicles))
 		if i == int(l.Target) {
-			ps[i] = uint8(r.Intn(5))
+			ps[i] = randomUint8(r, 5)
 			if validPositions(l, ps) {
 				return puzzle.EncodeState(ps), true
 			}
 			continue
 		}
 		limit := int(6 - l.Vehicles[i].Length)
-		ps[i] = uint8(r.Intn(limit + 1))
+		ps[i] = randomUint8(r, limit+1)
 		if validPositions(l, ps) {
 			return puzzle.EncodeState(ps), true
 		}
@@ -340,28 +349,33 @@ func abs(x float64) float64 {
 	}
 	return x
 }
+
+func randomUint8(r *rand.Rand, limit int) uint8 {
+	return uint8(r.Intn(limit)) //nolint:gosec // All limits are bounded by the 6x6 board model.
+}
+
 func layout(r *rand.Rand, c Config) (puzzle.Level, error) {
 	n := c.MinVehicles
 	if c.MaxVehicles > c.MinVehicles {
 		n += r.Intn(c.MaxVehicles - c.MinVehicles + 1)
 	}
 	l := puzzle.Level{Width: 6, Height: 6, Target: 0, Initial: puzzle.State{Positions: make([]uint8, n)}, Vehicles: make([]puzzle.Vehicle, n)}
-	l.Vehicles[0] = puzzle.Vehicle{ID: 0, Orientation: puzzle.Horizontal, Length: 2, Fixed: uint8(1 + r.Intn(4))}
-	l.Initial.Positions[0] = uint8(1 + r.Intn(3))
+	l.Vehicles[0] = puzzle.Vehicle{ID: 0, Orientation: puzzle.Horizontal, Length: 2, Fixed: 1 + randomUint8(r, 4)}
+	l.Initial.Positions[0] = 1 + randomUint8(r, 3)
 	occupied := map[[2]uint8]bool{}
-	for x := int(l.Initial.Positions[0]); x < int(l.Initial.Positions[0])+2; x++ {
-		occupied[[2]uint8{uint8(x), l.Vehicles[0].Fixed}] = true
+	for x := l.Initial.Positions[0]; x < l.Initial.Positions[0]+2; x++ {
+		occupied[[2]uint8{x, l.Vehicles[0].Fixed}] = true
 	}
 	for i := 1; i < n; i++ {
 		ok := false
 		for tries := 0; tries < 100 && !ok; tries++ {
-			o := puzzle.Orientation(r.Intn(2))
+			o := puzzle.Orientation(randomUint8(r, 2))
 			length := uint8(2)
 			if r.Intn(4) == 0 {
 				length = 3
 			}
-			fixed := uint8(r.Intn(6))
-			pos := uint8(r.Intn(int(7 - length)))
+			fixed := randomUint8(r, 6)
+			pos := randomUint8(r, int(7-length))
 			good := true
 			for z := uint8(0); z < length; z++ {
 				x, y := pos+z, fixed
@@ -378,7 +392,8 @@ func layout(r *rand.Rand, c Config) (puzzle.Level, error) {
 				}
 			}
 			if good {
-				l.Vehicles[i] = puzzle.Vehicle{ID: uint8(i), Orientation: o, Length: length, Fixed: fixed}
+				vehicleID := uint8(i) //nolint:gosec // Config validation caps vehicle count at 18.
+				l.Vehicles[i] = puzzle.Vehicle{ID: vehicleID, Orientation: o, Length: length, Fixed: fixed}
 				l.Initial.Positions[i] = pos
 				for z := uint8(0); z < length; z++ {
 					x, y := pos+z, fixed
@@ -403,6 +418,8 @@ func decode(k puzzle.StateKey, n int) []uint8 {
 	}
 	return p
 }
+
+// CanonicalHash returns a stable identity for a level independent of vehicle order.
 func CanonicalHash(l puzzle.Level) string {
 	type f struct {
 		o                  puzzle.Orientation

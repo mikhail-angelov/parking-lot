@@ -84,3 +84,47 @@ when WebKit-compatible rendering is correct.
 
 This workflow uses macOS Quick Look and is intended for local visual checks;
 the application still renders the same SVG strings through the browser canvas.
+
+## 2026-09-03 — Adopt the Go template linter without breaking CI
+
+### Goal
+
+Add the repository-standard Go lint workflow to an existing project and keep
+the first CI run green.
+
+### Golden path
+
+1. Copy `.golangci.yml` and the pinned `golangci/golangci-lint-action` setup
+   from `/Users/ma/repo/go-cli-template`.
+2. Keep the target repository's Go setup authoritative; use its `go.mod`
+   instead of copying the template's Go version.
+3. Before pushing, run the exact pinned linter locally with
+   `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.1 run`.
+4. Fix actionable findings in the code and use narrow, justified `nolint`
+   directives only for intentional domain behavior or analyzer false positives.
+5. Run the same race tests, build, and non-Go tests that CI will execute.
+
+`govet` is enabled inside `.golangci.yml`, so a separate `go vet` CI step is
+not required.
+
+### Verification
+
+The pinned linter reported `0 issues`. `go test -race -timeout=100s ./...`,
+`go build ./...`, and `node --test public/game_test.js` all exited successfully.
+
+### Failure pattern avoided
+
+Copying a strict lint workflow without first running the exact pinned version
+locally can make the first remote CI run fail on pre-existing code.
+
+### Ruled-out approaches
+
+- Tried adding the template configuration before establishing a lint baseline;
+  the pinned linter found 87 existing issues.
+- Tried `golangci-lint run --fix`; it could not resolve the remaining semantic
+  findings, which required deliberate code changes or justified suppressions.
+
+### Notes
+
+Do not copy unused settings for disabled linters from the template. Preserve
+public file permissions when `gosec` flags intentionally shareable web assets.

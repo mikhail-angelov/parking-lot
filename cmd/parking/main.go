@@ -39,9 +39,13 @@ func load(args []string) (*engine.PreparedLevel, error) {
 	}
 	l, e := levelio.Load(args[0])
 	if e != nil {
-		return nil, e
+		return nil, fmt.Errorf("load level: %w", e)
 	}
-	return engine.Prepare(l)
+	p, e := engine.Prepare(l)
+	if e != nil {
+		return nil, fmt.Errorf("prepare level: %w", e)
+	}
+	return p, nil
 }
 func renderCmd(args []string) {
 	p, e := load(args)
@@ -55,7 +59,7 @@ func solveCmd(args []string) {
 	show := fs.Bool("show-boards", false, "show solution boards")
 	maxDepth := fs.Int("max-depth", 100, "maximum BFS depth")
 	maxStates := fs.Int("max-states", 2000000, "maximum BFS states")
-	fs.Parse(args)
+	fs.Parse(args) //nolint:gosec // ExitOnError terminates the process on invalid arguments.
 	p, e := load(fs.Args())
 	if e != nil {
 		fail(e)
@@ -75,7 +79,7 @@ func analyzeCmd(args []string) {
 	fs := flag.NewFlagSet("analyze", flag.ExitOnError)
 	maxDepth := fs.Int("max-depth", 100, "maximum BFS depth")
 	maxStates := fs.Int("max-states", 2000000, "maximum BFS states")
-	fs.Parse(args)
+	fs.Parse(args) //nolint:gosec // ExitOnError terminates the process on invalid arguments.
 	p, e := load(fs.Args())
 	if e != nil {
 		fail(e)
@@ -93,30 +97,14 @@ func generateCmd(args []string) {
 	out := fs.String("output", "", "")
 	count := fs.Int("count", 1, "")
 	workers := fs.Int("workers", 1, "")
-	fs.Parse(args)
+	fs.Parse(args) //nolint:gosec // ExitOnError terminates the process on invalid arguments.
 	c := generator.Defaults(analyzer.DifficultyTier(*d))
 	c.Seed = *seed
 	if *count < 1 {
 		fail(fmt.Errorf("count must be positive"))
 	}
 	if *count == 1 {
-		g, e := generator.Generate(c)
-		if e != nil {
-			fail(e)
-		}
-		if *out != "" {
-			id := fmt.Sprintf("%s-%d", g.Analysis.DifficultyTier, g.Seed)
-			f := levelio.NewGeneratedFile(id, g.Level, g.Analysis, g.Solution, g.Seed)
-			if e = levelio.WriteDataset(*out, []levelio.File{f}); e != nil {
-				fail(e)
-			}
-			return
-		}
-		p, e := engine.Prepare(g.Level)
-		if e != nil {
-			fail(e)
-		}
-		fmt.Println(render.ASCII(p, g.Level.InitialKey()))
+		generateOne(c, *out)
 		return
 	}
 	levels, e := generator.Bulk(generator.BulkConfig{
@@ -148,6 +136,26 @@ func generateCmd(args []string) {
 	}
 }
 
+func generateOne(c generator.Config, output string) {
+	generated, err := generator.Generate(c)
+	if err != nil {
+		fail(err)
+	}
+	if output != "" {
+		id := fmt.Sprintf("%s-%d", generated.Analysis.DifficultyTier, generated.Seed)
+		file := levelio.NewGeneratedFile(id, generated.Level, generated.Analysis, generated.Solution, generated.Seed)
+		if err = levelio.WriteDataset(output, []levelio.File{file}); err != nil {
+			fail(err)
+		}
+		return
+	}
+	prepared, err := engine.Prepare(generated.Level)
+	if err != nil {
+		fail(err)
+	}
+	fmt.Println(render.ASCII(prepared, generated.Level.InitialKey()))
+}
+
 // generatePacksCmd generates a series of level packs with difficulty ramping
 // smoothly from easy to hard across the requested number of packs, and
 // writes a manifest so the web app can list and switch between them.
@@ -158,11 +166,11 @@ func generatePacksCmd(args []string) {
 	seed := fs.Int64("seed", 1, "base seed")
 	workers := fs.Int("workers", 4, "parallel workers")
 	dir := fs.String("out", "public/levels", "output directory")
-	fs.Parse(args)
+	fs.Parse(args) //nolint:gosec // ExitOnError terminates the process on invalid arguments.
 	if *packs < 1 || *size < 1 {
 		fail(fmt.Errorf("packs and pack-size must be positive"))
 	}
-	if e := os.MkdirAll(*dir, 0755); e != nil {
+	if e := os.MkdirAll(*dir, 0o755); e != nil { //nolint:gosec // Generated web assets must be publicly readable.
 		fail(e)
 	}
 	// Packs cover the playable scale from the former Medium band through the
@@ -189,8 +197,8 @@ func generatePacksCmd(args []string) {
 		}
 		docs := make([]levelio.File, 0, len(levels))
 		for j, g := range levels {
-			id := fmt.Sprintf("%s-%03d-%04d", tier, i+1, j)
-			docs = append(docs, levelio.NewGeneratedFile(id, g.Level, g.Analysis, g.Solution, g.Seed))
+			levelID := fmt.Sprintf("%s-%03d-%04d", tier, i+1, j)
+			docs = append(docs, levelio.NewGeneratedFile(levelID, g.Level, g.Analysis, g.Solution, g.Seed))
 		}
 		if e = levelio.WritePack(*dir, id, docs); e != nil {
 			fail(e)

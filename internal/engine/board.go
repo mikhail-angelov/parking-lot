@@ -1,23 +1,29 @@
 package engine
 
-import "parking/internal/puzzle"
+import (
+	"fmt"
+	"parking/internal/puzzle"
+)
 
-import "fmt"
-
+// BoardMask is a bit set of occupied cells on the fixed 6x6 board.
 type BoardMask uint64
+
+// PreparedLevel stores a validated level and its precomputed vehicle masks.
 type PreparedLevel struct {
 	Level puzzle.Level
 	masks [][]BoardMask
 }
 
+// BlockingVehicle identifies a vehicle and the cells where it blocks a move.
 type BlockingVehicle struct {
 	Vehicle int
 	Cells   BoardMask
 }
 
+// Prepare validates a level and precomputes every vehicle placement.
 func Prepare(l puzzle.Level) (*PreparedLevel, error) {
 	if err := puzzle.ValidateLevelAllowSolved(l); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate level: %w", err)
 	}
 	p := &PreparedLevel{Level: l, masks: make([][]BoardMask, len(l.Vehicles))}
 	for i, v := range l.Vehicles {
@@ -37,6 +43,8 @@ func Prepare(l puzzle.Level) (*PreparedLevel, error) {
 	}
 	return p, nil
 }
+
+// Occupancy returns all cells occupied in a state.
 func Occupancy(p *PreparedLevel, k puzzle.StateKey) BoardMask {
 	var m BoardMask
 	for i := range p.Level.Vehicles {
@@ -44,6 +52,8 @@ func Occupancy(p *PreparedLevel, k puzzle.StateKey) BoardMask {
 	}
 	return m
 }
+
+// GenerateMoves appends all legal moves to a reusable destination slice.
 func GenerateMoves(p *PreparedLevel, k puzzle.StateKey, dst []puzzle.Move) []puzzle.Move {
 	dst = dst[:0]
 	occ := Occupancy(p, k)
@@ -51,22 +61,24 @@ func GenerateMoves(p *PreparedLevel, k puzzle.StateKey, dst []puzzle.Move) []puz
 		pos := puzzle.Position(k, i)
 		own := p.masks[i][pos]
 		other := occ &^ own
-		for q := int(pos) - 1; q >= 0; q-- {
+		for q := pos; q > 0; {
+			q--
 			if p.masks[i][q]&other != 0 {
 				break
 			}
-			dst = append(dst, puzzle.Move{Vehicle: uint8(i), From: pos, To: uint8(q)})
+			dst = append(dst, puzzle.Move{Vehicle: p.Level.Vehicles[i].ID, From: pos, To: q})
 		}
-		for q := int(pos) + 1; q < len(p.masks[i]); q++ {
+		for q := pos + 1; int(q) < len(p.masks[i]); q++ {
 			if p.masks[i][q]&other != 0 {
 				break
 			}
-			dst = append(dst, puzzle.Move{Vehicle: uint8(i), From: pos, To: uint8(q)})
+			dst = append(dst, puzzle.Move{Vehicle: p.Level.Vehicles[i].ID, From: pos, To: q})
 		}
 	}
 	return dst
 }
 
+// PositionCount returns the number of placements available to a vehicle.
 func PositionCount(p *PreparedLevel, vehicle int) int {
 	if vehicle < 0 || vehicle >= len(p.masks) {
 		return 0
@@ -74,10 +86,12 @@ func PositionCount(p *PreparedLevel, vehicle int) int {
 	return len(p.masks[vehicle])
 }
 
+// PlacementClears reports whether a placement avoids the supplied cells.
 func PlacementClears(p *PreparedLevel, vehicle int, position uint8, cells BoardMask) bool {
 	return vehicle >= 0 && vehicle < len(p.masks) && int(position) < len(p.masks[vehicle]) && p.masks[vehicle][position]&cells == 0
 }
 
+// BlockingVehiclesForMove returns every vehicle intersecting a move's path.
 func BlockingVehiclesForMove(p *PreparedLevel, k puzzle.StateKey, vehicle int, to uint8) []BlockingVehicle {
 	if vehicle < 0 || vehicle >= len(p.masks) || int(to) >= len(p.masks[vehicle]) {
 		return nil
@@ -112,14 +126,19 @@ func BlockingVehiclesForMove(p *PreparedLevel, k puzzle.StateKey, vehicle int, t
 	return blockers
 }
 
+// TargetBlockingVehicles returns the vehicles between the target and the exit.
 func TargetBlockingVehicles(p *PreparedLevel, k puzzle.StateKey) []BlockingVehicle {
 	target := int(p.Level.Target)
-	return BlockingVehiclesForMove(p, k, target, uint8(len(p.masks[target])-1))
+	exitPosition := puzzle.BoardSize - p.Level.Vehicles[target].Length
+	return BlockingVehiclesForMove(p, k, target, exitPosition)
 }
+
+// ApplyMove applies a known legal move to a state.
 func ApplyMove(_ *PreparedLevel, k puzzle.StateKey, m puzzle.Move) puzzle.StateKey {
 	return puzzle.WithPosition(k, int(m.Vehicle), m.To)
 }
 
+// ApplyMoveChecked validates a move before applying it.
 func ApplyMoveChecked(p *PreparedLevel, k puzzle.StateKey, m puzzle.Move) (puzzle.StateKey, error) {
 	for _, legal := range GenerateMoves(p, k, nil) {
 		if legal == m {
@@ -128,6 +147,8 @@ func ApplyMoveChecked(p *PreparedLevel, k puzzle.StateKey, m puzzle.Move) (puzzl
 	}
 	return k, fmt.Errorf("illegal move: vehicle %d from %d to %d", m.Vehicle, m.From, m.To)
 }
+
+// IsSolved reports whether the target has a clear path to the exit.
 func IsSolved(p *PreparedLevel, k puzzle.StateKey) bool {
 	t := p.Level.Vehicles[p.Level.Target]
 	pos := puzzle.Position(k, int(p.Level.Target))

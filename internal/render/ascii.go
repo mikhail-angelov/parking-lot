@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// ASCII renders a level state as a text board.
 func ASCII(p *engine.PreparedLevel, k puzzle.StateKey) string {
 	grid := make([][]rune, 6)
 	for y := range grid {

@@ -7,8 +7,10 @@ import (
 	"parking/internal/solver"
 )
 
+// DifficultyTier identifies a generated level's difficulty band.
 type DifficultyTier string
 
+// Supported difficulty tiers, ordered from easiest to hardest.
 const (
 	Easy   DifficultyTier = "easy"
 	Medium DifficultyTier = "medium"
@@ -16,6 +18,7 @@ const (
 	Expert DifficultyTier = "expert"
 )
 
+// Metrics contains the measurements used to score a level.
 type Metrics struct {
 	OptimalMoves       int     `json:"optimalMoves"`
 	TotalCellDistance  int     `json:"totalCellDistance"`
@@ -34,6 +37,8 @@ type Metrics struct {
 	OptimalSolutions   int     `json:"optimalSolutions"`
 	ParticipationRatio float64 `json:"participationRatio"`
 }
+
+// Config controls analysis search limits and quality thresholds.
 type Config struct {
 	MaxDepth         int
 	MaxStates        int
@@ -41,6 +46,8 @@ type Config struct {
 	MinParticipation float64
 	MinOptimalMoves  int
 }
+
+// Analysis describes a level's solution, difficulty, and quality.
 type Analysis struct {
 	Solvable        bool           `json:"solvable"`
 	LimitReached    bool           `json:"limitReached,omitempty"`
@@ -86,6 +93,7 @@ func MatchesTier(score float64, requested DifficultyTier) bool {
 	return ok && score >= policy.minScore && (policy.maxScore == 0 || score < policy.maxScore)
 }
 
+// TierCenter returns the target score at the center of a difficulty tier.
 func TierCenter(tier DifficultyTier) float64 {
 	policy, _ := policyFor(tier)
 	return policy.center
@@ -108,6 +116,8 @@ func clamp(x float64) float64 {
 	}
 	return x
 }
+
+// Analyze returns complete solution, difficulty, and quality metrics for a level.
 func Analyze(p *engine.PreparedLevel, c Config) Analysis {
 	return analyze(p, c, 0)
 }
@@ -248,7 +258,7 @@ func minimumOptimalMoves(tier DifficultyTier) int {
 	}
 	return policy.minMoves
 }
-func dependencyMetrics(p *engine.PreparedLevel) (int, int) {
+func dependencyMetrics(p *engine.PreparedLevel) (dependencyDepth, dependencyNodes int) {
 	k := p.Level.InitialKey()
 	direct := engine.TargetBlockingVehicles(p, k)
 	allNodes := make(map[int]bool)
@@ -316,7 +326,12 @@ func resolveDependency(p *engine.PreparedLevel, k puzzle.StateKey, vehicle int, 
 	return best
 }
 
-func branching(p *engine.PreparedLevel, solution []puzzle.Move, toGoal map[puzzle.StateKey]int) (float64, int, float64, float64) {
+func branching(p *engine.PreparedLevel, solution []puzzle.Move, toGoal map[puzzle.StateKey]int) (
+	averageBranching float64,
+	maxBranching int,
+	distractingRatioResult float64,
+	forcedRatioResult float64,
+) {
 	if len(solution) == 0 {
 		return 0, 0, 0, 0
 	}

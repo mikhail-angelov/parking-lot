@@ -5,13 +5,16 @@ import (
 	"parking/internal/puzzle"
 )
 
+// Options contains breadth-first search limits.
 type Options struct {
 	MaxDepth  int
 	MaxStates int
 }
 
+// DefaultMaxDepth is the search depth used when none is specified.
 const DefaultMaxDepth = 100
 
+// Result describes an optimal-solution search.
 type Result struct {
 	Solved         bool
 	MinMoves       int
@@ -38,6 +41,7 @@ type parentInfo struct {
 	Depth  int
 }
 
+// Solve finds an optimal solution with breadth-first search.
 func Solve(p *engine.PreparedLevel, o Options) Result {
 	o = normalize(o)
 	start := p.Level.InitialKey()
@@ -99,10 +103,13 @@ func reconstruct(seen map[puzzle.StateKey]parentInfo, k puzzle.StateKey) []puzzl
 	return out
 }
 
+// ExplorationOptions contains full state-space exploration limits.
 type ExplorationOptions struct {
 	MaxDepth  int
 	MaxStates int
 }
+
+// Exploration summarizes the reachable state space of a level.
 type Exploration struct {
 	Solved            bool
 	MinMoves          int
@@ -115,6 +122,7 @@ type Exploration struct {
 	ToGoal            map[puzzle.StateKey]int
 }
 
+// Explore measures every state reachable within the configured limits.
 func Explore(p *engine.PreparedLevel, o ExplorationOptions) Exploration {
 	if o.MaxDepth <= 0 {
 		o.MaxDepth = DefaultMaxDepth
@@ -171,7 +179,7 @@ func Explore(p *engine.PreparedLevel, o ExplorationOptions) Exploration {
 	return finishExploration(p, result, dist, ways)
 }
 
-func finishExploration(p *engine.PreparedLevel, result Exploration, dist map[puzzle.StateKey]int, ways map[puzzle.StateKey]int) Exploration {
+func finishExploration(p *engine.PreparedLevel, result Exploration, dist, ways map[puzzle.StateKey]int) Exploration {
 	result.ReachableStates = len(dist)
 	goals := make([]puzzle.StateKey, 0)
 	for state, d := range dist {

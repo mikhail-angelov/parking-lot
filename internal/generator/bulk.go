@@ -6,6 +6,7 @@ import (
 	"sync"
 )
 
+// BulkConfig controls parallel generation of a level collection.
 type BulkConfig struct {
 	Generator      Config
 	Count          int
@@ -14,6 +15,7 @@ type BulkConfig struct {
 	Progress       func(Progress)
 }
 
+// Progress reports aggregate bulk generation activity.
 type Progress struct {
 	Accepted   int
 	Target     int
@@ -28,6 +30,7 @@ type bulkResult struct {
 	err   error
 }
 
+// Bulk generates the requested number of levels with bounded parallel work.
 func Bulk(c BulkConfig) ([]GeneratedLevel, error) {
 	if c.Count < 0 || c.Workers < 1 {
 		return nil, fmt.Errorf("count must be non-negative and workers must be positive")

@@ -16,6 +16,8 @@ type fileVehicle struct {
 	Fixed       uint8  `json:"fixed"`
 	Position    uint8  `json:"position"`
 }
+
+// File is the versioned JSON representation of a level.
 type File struct {
 	Version int    `json:"version"`
 	ID      string `json:"id,omitempty"`
@@ -31,10 +33,12 @@ type File struct {
 	Generation *Generation        `json:"generation,omitempty"`
 }
 
+// Generation records the seed used to create a level.
 type Generation struct {
 	Seed int64 `json:"seed"`
 }
 
+// FromFile validates and converts a JSON level representation.
 func FromFile(f File) (puzzle.Level, error) {
 	if f.Version != 1 {
 		return puzzle.Level{}, fmt.Errorf("unsupported level version %d", f.Version)
@@ -46,13 +50,18 @@ func FromFile(f File) (puzzle.Level, error) {
 	for i, v := range f.Vehicles {
 		o, e := puzzle.ParseOrientation(v.Orientation)
 		if e != nil {
-			return l, e
+			return l, fmt.Errorf("parse vehicle %d orientation: %w", i, e)
 		}
 		l.Vehicles[i] = puzzle.Vehicle{ID: v.ID, Orientation: o, Length: v.Length, Fixed: v.Fixed}
 		l.Initial.Positions[i] = v.Position
 	}
-	return l, puzzle.ValidateLevelAllowSolved(l)
+	if err := puzzle.ValidateLevelAllowSolved(l); err != nil {
+		return l, fmt.Errorf("validate level: %w", err)
+	}
+	return l, nil
 }
+
+// ToFile converts a level to its versioned JSON representation.
 func ToFile(l puzzle.Level) File {
 	f := File{Version: 1, Target: l.Target}
 	f.Board.Width = l.Width
@@ -64,29 +73,34 @@ func ToFile(l puzzle.Level) File {
 	}
 	return f
 }
+
+// Load reads and validates a level from a caller-provided path.
 func Load(path string) (puzzle.Level, error) {
-	b, e := os.ReadFile(path)
-	if e != nil {
-		return puzzle.Level{}, e
+	b, readErr := os.ReadFile(path) //nolint:gosec // Loading an explicit CLI path is the intended behavior.
+	if readErr != nil {
+		return puzzle.Level{}, fmt.Errorf("read level %q: %w", path, readErr)
 	}
 	var f File
-	if e = json.Unmarshal(b, &f); e != nil {
-		return puzzle.Level{}, e
+	if decodeErr := json.Unmarshal(b, &f); decodeErr != nil {
+		return puzzle.Level{}, fmt.Errorf("decode level %q: %w", path, decodeErr)
 	}
-	l, e := FromFile(f)
-	if e != nil {
-		return l, fmt.Errorf("invalid level: %w", e)
+	l, convertErr := FromFile(f)
+	if convertErr != nil {
+		return l, fmt.Errorf("invalid level: %w", convertErr)
 	}
 	return l, nil
 }
+
+// Write serializes a level atomically.
 func Write(path string, l puzzle.Level) error {
-	b, e := json.MarshalIndent(ToFile(l), "", "  ")
-	if e == nil {
-		e = writeAtomic(path, b)
+	b, err := json.MarshalIndent(ToFile(l), "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode level: %w", err)
 	}
-	return e
+	return writeAtomic(path, b)
 }
 
+// NewGeneratedFile adds analysis and generation metadata to a level.
 func NewGeneratedFile(id string, l puzzle.Level, a analyzer.Analysis, solution []puzzle.Move, seed int64) File {
 	f := ToFile(l)
 	f.ID = id
@@ -96,6 +110,7 @@ func NewGeneratedFile(id string, l puzzle.Level, a analyzer.Analysis, solution [
 	return f
 }
 
+// WriteDataset serializes one level or a level collection atomically.
 func WriteDataset(path string, docs []File) error {
 	var jsonValue any = docs
 	if len(docs) == 1 {
@@ -103,7 +118,7 @@ func WriteDataset(path string, docs []File) error {
 	}
 	jsonData, err := json.MarshalIndent(jsonValue, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("encode level dataset: %w", err)
 	}
 	return writeAtomic(path, jsonData)
 }
@@ -117,10 +132,11 @@ type Pack struct {
 	Index int    `json:"index"`
 }
 
+// WritePack serializes one generated level pack atomically.
 func WritePack(dir, id string, docs []File) error {
 	b, err := json.MarshalIndent(docs, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("encode level pack %q: %w", id, err)
 	}
 	return writeAtomic(filepath.Join(dir, id+".json"), b)
 }
@@ -129,7 +145,7 @@ func WritePack(dir, id string, docs []File) error {
 func WriteManifest(dir string, packs []Pack) error {
 	b, err := json.MarshalIndent(packs, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("encode level manifest: %w", err)
 	}
 	return writeAtomic(filepath.Join(dir, "manifest.json"), b)
 }
@@ -137,7 +153,7 @@ func WriteManifest(dir string, packs []Pack) error {
 func writeAtomic(path string, data []byte) (err error) {
 	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temporary file for %q: %w", path, err)
 	}
 	temporaryPath := temporary.Name()
 	defer func() {
@@ -146,14 +162,20 @@ func writeAtomic(path string, data []byte) (err error) {
 			_ = os.Remove(temporaryPath)
 		}
 	}()
-	if _, err = temporary.Write(data); err != nil {
+	if _, writeErr := temporary.Write(data); writeErr != nil {
+		err = fmt.Errorf("write temporary file for %q: %w", path, writeErr)
 		return err
 	}
-	if err = temporary.Chmod(0644); err != nil {
+	if chmodErr := temporary.Chmod(0o644); chmodErr != nil {
+		err = fmt.Errorf("set permissions on temporary file for %q: %w", path, chmodErr)
 		return err
 	}
-	if err = temporary.Close(); err != nil {
+	if closeErr := temporary.Close(); closeErr != nil {
+		err = fmt.Errorf("close temporary file for %q: %w", path, closeErr)
 		return err
 	}
-	return os.Rename(temporaryPath, path)
+	if renameErr := os.Rename(temporaryPath, path); renameErr != nil {
+		return fmt.Errorf("replace %q: %w", path, renameErr)
+	}
+	return nil
 }

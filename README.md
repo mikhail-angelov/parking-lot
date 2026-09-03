@@ -32,7 +32,9 @@ Then open <http://localhost:8000>.
 ## Test
 
 ```sh
-go test ./...
+go test -race ./...
+go build ./...
+golangci-lint run
 node --test public/game_test.js
 ```
 

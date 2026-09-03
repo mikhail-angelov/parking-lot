@@ -2,7 +2,10 @@ package puzzle
 
 import "fmt"
 
-func ValidateLevel(l Level) error            { return validateLevel(l, false) }
+// ValidateLevel validates an unsolved playable level.
+func ValidateLevel(l Level) error { return validateLevel(l, false) }
+
+// ValidateLevelAllowSolved validates a level without requiring an initial blocker.
 func ValidateLevelAllowSolved(l Level) error { return validateLevel(l, true) }
 func validateLevel(l Level, allowSolved bool) error {
 	if l.Width != BoardSize || l.Height != BoardSize {
