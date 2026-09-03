@@ -637,31 +637,51 @@
   function initTelegram() {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
-    tg.ready();
-    tg.expand();
-    tg.disableVerticalSwipes?.();
-    const applyTheme = () => {
-      const p = tg.themeParams || {};
-      const root = document.documentElement.style;
-      if (p.bg_color) root.setProperty("--paper", p.bg_color);
-      if (p.secondary_bg_color)
-        root.setProperty("--panel", p.secondary_bg_color);
-      if (p.text_color) root.setProperty("--ink", p.text_color);
-      if (p.hint_color) root.setProperty("--muted", p.hint_color);
-      if (p.button_color) root.setProperty("--accent", p.button_color);
-      tg.setHeaderColor?.(p.bg_color ? "bg_color" : "secondary_bg_color");
-      tg.setBackgroundColor?.(p.bg_color || "#f6f8f7");
-    };
-    const applyViewport = () => {
-      document.documentElement.style.setProperty(
-        "--tg-viewport-height",
-        `${tg.viewportStableHeight || tg.viewportHeight || window.innerHeight}px`,
-      );
-    };
-    applyTheme();
-    applyViewport();
-    tg.onEvent("themeChanged", applyTheme);
-    tg.onEvent("viewportChanged", applyViewport);
+    try {
+      tg.ready();
+      tg.expand();
+      tg.disableVerticalSwipes?.();
+      const applyTheme = () => {
+        const p = tg.themeParams || {};
+        const root = document.documentElement.style;
+        if (p.bg_color) root.setProperty("--paper", p.bg_color);
+        if (p.secondary_bg_color)
+          root.setProperty("--panel", p.secondary_bg_color);
+        if (p.text_color) root.setProperty("--ink", p.text_color);
+        if (p.hint_color) root.setProperty("--muted", p.hint_color);
+        if (p.button_color) root.setProperty("--accent", p.button_color);
+        tg.setHeaderColor?.(p.bg_color ? "bg_color" : "secondary_bg_color");
+        tg.setBackgroundColor?.(p.bg_color || "#f6f8f7");
+      };
+      const applyViewport = () => {
+        // Android WebView may report 0 at startup -> never collapse the shell
+        const reported = Math.max(
+          tg.viewportStableHeight || 0,
+          tg.viewportHeight || 0,
+        );
+        const px =
+          reported > 200
+            ? reported
+            : window.innerHeight ||
+              document.documentElement.clientHeight ||
+              700;
+        document.documentElement.style.setProperty(
+          "--tg-viewport-height",
+          `${px}px`,
+        );
+      };
+      applyTheme();
+      applyViewport();
+      // stable height arrives async after expand() on some platforms
+      setTimeout(applyViewport, 300);
+      setTimeout(applyViewport, 1200);
+      window.addEventListener("resize", applyViewport);
+      tg.onEvent("themeChanged", applyTheme);
+      tg.onEvent("viewportChanged", applyViewport);
+    } catch (error) {
+      // Never let WebApp API issues blank the app
+      console.warn("telegram webapp init failed", error);
+    }
   }
 
   async function init() {
