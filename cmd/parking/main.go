@@ -10,6 +10,7 @@ import (
 	"parking/internal/levelio"
 	"parking/internal/render"
 	"parking/internal/solver"
+	"path/filepath"
 	"time"
 )
 
@@ -202,6 +203,16 @@ func generatePacksCmd(args []string) {
 		}
 		if e = levelio.WritePack(*dir, id, docs); e != nil {
 			fail(e)
+		}
+		// Per-level files let the web app lazy-load one level at a time.
+		levelDir := filepath.Join(*dir, id)
+		if e = os.MkdirAll(levelDir, 0o755); e != nil { //nolint:gosec // Generated web assets must be publicly readable.
+			fail(e)
+		}
+		for j := range docs {
+			if e = levelio.WriteDataset(filepath.Join(levelDir, fmt.Sprintf("%04d.json", j+1)), docs[j:j+1]); e != nil {
+				fail(e)
+			}
 		}
 		for _, level := range levels {
 			generatedHashes[generator.CanonicalHash(level.Level)] = true

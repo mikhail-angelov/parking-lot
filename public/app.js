@@ -18,8 +18,11 @@
   ];
   const state = {
     packs: [],
+    pack: null,
     packId: null,
+    count: 0,
     levels: [],
+    legacy: null,
     index: 0,
     game: null,
     selected: -1,
@@ -197,6 +200,13 @@
   const lastIndexKey = () => `parking-puzzle-last-index-v1:${state.packId}`;
   const level = () => state.levels[state.index];
 
+  // level ids are deterministic: <tier>-<packIndex:03>-<levelIndex:04>
+  function levelIdAt(index) {
+    const pack = state.pack;
+    if (!pack) return null;
+    return `${pack.tier}-${String(pack.index).padStart(3, "0")}-${String(index).padStart(4, "0")}`;
+  }
+
   function resize() {
     const wrap = canvas.parentElement;
     const wrapRect = wrap.getBoundingClientRect();
@@ -308,11 +318,13 @@
   }
 
   function isComplete(index) {
-    return Boolean(progressMap()[state.levels[index].id]);
+    const id = state.levels[index]?.id ?? levelIdAt(index);
+    return Boolean(id && progressMap()[id]);
   }
 
   function levelResult(index) {
-    return progressMap()[state.levels[index].id] || null;
+    const id = state.levels[index]?.id ?? levelIdAt(index);
+    return (id && progressMap()[id]) || null;
   }
 
   function computeStars(moves, optimalMoves) {
@@ -342,7 +354,7 @@
   function renderLevels() {
     const list = $("level-list");
     list.replaceChildren();
-    state.levels.forEach((_item, index) => {
+    for (let index = 0; index < state.count; index++) {
       const done = isComplete(index);
       const button = document.createElement("button");
       const number = document.createElement("span");
@@ -357,17 +369,20 @@
         closeDrawer();
       });
       list.append(button);
-    });
+    }
   }
 
   function render() {
     draw();
     $("moves").textContent = state.game.moves;
     $("level-count").textContent = `Уровень ${state.index + 1}`;
-    $("level-status").textContent =
-      `${state.index + 1} / ${state.levels.length}`;
-    $("level-title").textContent = level().id || `Парковка ${state.index + 1}`;
-    $("tier-label").textContent = level().analysis?.difficultyTier || "уровень";
+    $("level-status").textContent = `${state.index + 1} / ${state.count}`;
+    $("level-title").textContent =
+      level()?.id || `Уровень ${state.index + 1}`;
+    $("tier-label").textContent =
+      level()?.analysis?.difficultyTier ||
+      tierLabels[state.pack?.tier] ||
+      "уровень";
     document
       .querySelectorAll(".level-button")
       .forEach((button, index) =>
@@ -375,7 +390,7 @@
       );
     $("undo").disabled = !state.game.canUndo;
     $("next").disabled =
-      state.index >= state.levels.length - 1 || !isComplete(state.index);
+      state.index >= state.count - 1 || !isComplete(state.index);
   }
 
   function pointerPosition(event) {
@@ -567,24 +582,54 @@
     $("win-summary").textContent = optimal
       ? `Уровень пройден за ${state.game.moves} ход${state.game.moves === 1 ? "" : "ов"} (оптимально: ${optimal}).`
       : `Уровень пройден за ${state.game.moves} ход${state.game.moves === 1 ? "" : "ов"}.`;
-    $("dialog-next").disabled = state.index >= state.levels.length - 1;
+    $("dialog-next").disabled = state.index >= state.count - 1;
     $("win-dialog").hidden = false;
     confettiBurst();
   }
 
-  function loadLevel(index) {
+  let levelSeq = 0;
+  async function getLevel(index) {
+    if (state.levels[index]) return state.levels[index];
+    const base = state.pack.file.replace(/\.json$/, "");
+    const url = `levels/${base}/${String(index + 1).padStart(4, "0")}.json`;
+    const response = await fetch(url);
+    if (response.ok) {
+      const levelData = await response.json();
+      state.levels[index] = levelData;
+      return levelData;
+    }
+    // fallback: whole-pack file (legacy layout) — fetch once per pack
+    if (!state.legacy) state.legacy = await loadPackLevels(state.pack);
+    const levelData = state.legacy[index];
+    if (!levelData) throw new Error(`Уровень ${index + 1} не найден`);
+    state.levels[index] = levelData;
+    return levelData;
+  }
+
+  async function loadLevel(index) {
+    const seq = ++levelSeq;
+    const packId = state.packId;
     state.index = index;
-    state.game = window.ParkingGame.createGame(level());
     state.selected = -1;
     state.drag = null;
     state.anim = null;
     $("win-dialog").hidden = true;
-    localStorage.setItem(lastIndexKey(), String(index));
-    render();
+    $("level-title").textContent = `Уровень ${index + 1}…`;
+    try {
+      const levelData = await getLevel(index);
+      if (seq !== levelSeq || packId !== state.packId) return;
+      state.game = window.ParkingGame.createGame(levelData);
+      localStorage.setItem(lastIndexKey(), String(index));
+      clearError();
+      render();
+    } catch (error) {
+      if (seq !== levelSeq || packId !== state.packId) return;
+      reportError(error);
+    }
   }
 
   function nextLevel() {
-    if (state.index < state.levels.length - 1) loadLevel(state.index + 1);
+    if (state.index < state.count - 1) loadLevel(state.index + 1);
   }
 
   function renderPackOptions() {
@@ -602,26 +647,23 @@
   async function switchPack(packId, { persist = true } = {}) {
     const request = ++packRequest;
     const pack = state.packs.find((p) => p.id === packId) || state.packs[0];
-    try {
-      const levels = await loadPackLevels(pack);
-      if (request !== packRequest) return;
-      if (!levels.length) throw new Error("Пачка уровней пуста");
-      state.packId = pack.id;
-      state.levels = levels;
-      if (persist) localStorage.setItem(packKey, state.packId);
-      clearError();
-      renderPackOptions();
-      renderLevels();
-      const savedIndex = Number.parseInt(localStorage.getItem(lastIndexKey()), 10);
-      const startIndex =
-        Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < levels.length
-          ? savedIndex
-          : 0;
-      loadLevel(startIndex);
-    } catch (error) {
-      if (request !== packRequest) return;
-      throw error;
-    }
+    if (!pack) return;
+    state.pack = pack;
+    state.packId = pack.id;
+    state.levels = [];
+    state.legacy = null;
+    state.count = pack.count;
+    if (persist) localStorage.setItem(packKey, state.packId);
+    clearError();
+    renderPackOptions();
+    renderLevels();
+    const savedIndex = Number.parseInt(localStorage.getItem(lastIndexKey()), 10);
+    const startIndex =
+      Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < pack.count
+        ? savedIndex
+        : 0;
+    if (request !== packRequest) return;
+    await loadLevel(startIndex);
   }
 
   function openDrawer() {
