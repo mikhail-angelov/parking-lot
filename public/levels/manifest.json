@@ -1,0 +1,44 @@
+[
+  {
+    "id": "pack-001",
+    "file": "pack-001.json",
+    "tier": "easy",
+    "count": 100,
+    "index": 1
+  },
+  {
+    "id": "pack-002",
+    "file": "pack-002.json",
+    "tier": "easy",
+    "count": 100,
+    "index": 2
+  },
+  {
+    "id": "pack-003",
+    "file": "pack-003.json",
+    "tier": "medium",
+    "count": 100,
+    "index": 3
+  },
+  {
+    "id": "pack-004",
+    "file": "pack-004.json",
+    "tier": "medium",
+    "count": 100,
+    "index": 4
+  },
+  {
+    "id": "pack-005",
+    "file": "pack-005.json",
+    "tier": "hard",
+    "count": 100,
+    "index": 5
+  },
+  {
+    "id": "pack-006",
+    "file": "pack-006.json",
+    "tier": "hard",
+    "count": 100,
+    "index": 6
+  }
+]

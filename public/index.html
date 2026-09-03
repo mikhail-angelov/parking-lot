@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Parking Puzzle</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">PARKING PUZZLE</p>
+          <h1>Освободи выезд</h1>
+        </div>
+        <div class="progress" aria-live="polite">
+          <span id="level-count">Уровень 1</span
+          ><span id="level-status">0 / 0</span>
+        </div>
+      </header>
+
+      <section class="game-layout">
+        <aside class="panel level-panel">
+          <div class="panel-heading">
+            <h2>Уровни</h2>
+            <span id="tier-label" class="tier-badge">—</span>
+          </div>
+          <select
+            id="pack-select"
+            class="pack-select"
+            aria-label="Пачка уровней"
+          ></select>
+          <div
+            id="level-list"
+            class="level-list"
+            aria-label="Список уровней"
+          ></div>
+        </aside>
+
+        <section class="play-area">
+          <div class="level-intro">
+            <div>
+              <p class="eyebrow">ТЕКУЩАЯ ЗАДАЧА</p>
+              <h2 id="level-title">Загрузка уровней…</h2>
+            </div>
+            <div class="moves-card">
+              <span>Ходы</span><strong id="moves">0</strong>
+            </div>
+          </div>
+          <div class="board-wrap">
+            <canvas
+              id="board"
+              class="board"
+              width="600"
+              height="600"
+              tabindex="0"
+              aria-label="Игровое поле"
+            ></canvas>
+          </div>
+          <div class="controls">
+            <button id="undo" class="button secondary" type="button">
+              ↶ Отменить</button
+            ><button id="reset" class="button secondary" type="button">
+              Заново</button
+            ><button id="next" class="button primary" type="button" disabled>
+              Следующий уровень →
+            </button>
+          </div>
+          <p class="hint">
+            Перетаскивай машину вдоль её направления. Можно также выбрать машину
+            и использовать стрелки на клавиатуре.
+          </p>
+        </section>
+
+        <aside class="panel info-panel">
+          <div class="info-icon">✦</div>
+          <h2>Цель</h2>
+          <p>
+            Освободи путь для красной машины и выведи её через правый выезд.
+          </p>
+          <div class="legend">
+            <span class="legend-car target"></span> Целевая машина
+          </div>
+          <div class="legend">
+            <span class="legend-car"></span> Остальные машины
+          </div>
+        </aside>
+      </section>
+    </main>
+    <div id="win-dialog" class="dialog-backdrop" hidden>
+      <div class="dialog">
+        <div class="win-mark">✓</div>
+        <p class="eyebrow">УРОВЕНЬ ПРОЙДЕН</p>
+        <h2>Выезд свободен!</h2>
+        <p id="win-summary"></p>
+        <button id="dialog-next" class="button primary" type="button">
+          Следующий уровень →
+        </button>
+      </div>
+    </div>
+    <script src="game.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
