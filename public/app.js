@@ -180,14 +180,14 @@
   }
 
   async function loadManifest() {
-    const response = await fetch("levels/manifest.json", { cache: "no-store" });
+    const response = await fetch("levels/manifest.json");
     if (!response.ok)
       throw new Error(`Не удалось загрузить список пачек (${response.status})`);
     return response.json();
   }
 
   async function loadPackLevels(pack) {
-    const response = await fetch(`levels/${pack.file}`, { cache: "no-store" });
+    const response = await fetch(`levels/${pack.file}`);
     if (!response.ok)
       throw new Error(`Не удалось загрузить уровни (${response.status})`);
     return response.json();
