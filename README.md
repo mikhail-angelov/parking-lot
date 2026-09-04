@@ -1,10 +1,14 @@
-# Parking Puzzle
+# Parking Lot Puzzle Game
 
 [![CI and GitHub Pages](https://github.com/mikhail-angelov/parking-lot/actions/workflows/ci-pages.yml/badge.svg)](https://github.com/mikhail-angelov/parking-lot/actions/workflows/ci-pages.yml)
 
 A browser-based Rush Hour-style puzzle: move vehicles along their axes and clear the exit on the right for the red car.
 
 **[Play online](https://mikhail-angelov.github.io/parking-lot/)**
+
+**[Play in Telegram](https://t.me/ParkingLotPazzleBot)**
+
+<img width="320" alt="image" src="https://github.com/user-attachments/assets/b2f25eaa-f87e-4a2b-89d5-5be469e9bfe9" />
 
 The repository includes:
 
