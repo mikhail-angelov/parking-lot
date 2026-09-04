@@ -17,11 +17,13 @@
     <!-- non-blocking stylesheet: don't let CSS delay first paint of #boot-splash -->
     <link
       rel="preload"
-      href="styles.css"
+      href="styles.css?v=20260904e"
       as="style"
       onload="this.onload=null;this.rel='stylesheet'"
     />
-    <noscript><link rel="stylesheet" href="styles.css" /></noscript>
+    <noscript
+      ><link rel="stylesheet" href="styles.css?v=20260904e"
+    /></noscript>
     <!--
       Self-hosted (not https://telegram.org/js/telegram-web-app.js): that
       domain was observed to stall 60+ seconds on some mobile carriers,
@@ -29,7 +31,7 @@
       telegram.org occasionally to pick up SDK updates.
       async, not defer: even so, a hiccup here must never delay game.js/app.js.
     -->
-    <script id="tg-sdk" src="telegram-web-app.js" async></script>
+    <script id="tg-sdk" src="telegram-web-app.js?v=20260904e" async></script>
     <style>
       /* inline boot splash: visible before styles.css / scripts arrive */
       #boot-splash {
@@ -171,7 +173,7 @@
       </div>
     </div>
     <canvas id="confetti" class="confetti-layer" aria-hidden="true"></canvas>
-    <script src="game.js" defer></script>
-    <script src="app.js" defer></script>
+    <script src="game.js?v=20260904e" defer></script>
+    <script src="app.js?v=20260904e" defer></script>
   </body>
 </html>
