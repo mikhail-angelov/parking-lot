@@ -7,8 +7,6 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>Parking Puzzle</title>
-    <link rel="preconnect" href="https://telegram.org" />
-    <link rel="dns-prefetch" href="https://telegram.org" />
     <link rel="preload" href="levels/manifest.json" as="fetch" crossorigin />
     <link
       rel="preload"
@@ -24,12 +22,14 @@
       onload="this.onload=null;this.rel='stylesheet'"
     />
     <noscript><link rel="stylesheet" href="styles.css" /></noscript>
-    <!-- async, not defer: a slow/blocked telegram.org must never delay game.js/app.js -->
-    <script
-      id="tg-sdk"
-      src="https://telegram.org/js/telegram-web-app.js"
-      async
-    ></script>
+    <!--
+      Self-hosted (not https://telegram.org/js/telegram-web-app.js): that
+      domain was observed to stall 60+ seconds on some mobile carriers,
+      independent of Telegram's own app traffic. Re-sync this file from
+      telegram.org occasionally to pick up SDK updates.
+      async, not defer: even so, a hiccup here must never delay game.js/app.js.
+    -->
+    <script id="tg-sdk" src="telegram-web-app.js" async></script>
     <style>
       /* inline boot splash: visible before styles.css / scripts arrive */
       #boot-splash {
