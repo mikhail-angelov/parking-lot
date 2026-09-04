@@ -24,7 +24,12 @@
       onload="this.onload=null;this.rel='stylesheet'"
     />
     <noscript><link rel="stylesheet" href="styles.css" /></noscript>
-    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+    <!-- async, not defer: a slow/blocked telegram.org must never delay game.js/app.js -->
+    <script
+      id="tg-sdk"
+      src="https://telegram.org/js/telegram-web-app.js"
+      async
+    ></script>
     <style>
       /* inline boot splash: visible before styles.css / scripts arrive */
       #boot-splash {

@@ -78,6 +78,9 @@
   }
   mark("app.js start");
   dumpResourceTimings();
+  // telegram-web-app.js loads async now, so its resource-timing entry may not
+  // exist yet at "app.js start" — dump again once everything has settled
+  if (DEBUG) window.addEventListener("load", () => dumpResourceTimings());
   const $ = (id) => document.getElementById(id);
   const canvas = $("board");
   const ctx = canvas.getContext("2d");
@@ -727,9 +730,19 @@
     $("drawer-backdrop").hidden = true;
   }
 
+  function whenTelegramReady(callback) {
+    if (window.Telegram?.WebApp) return callback();
+    document.getElementById("tg-sdk")?.addEventListener(
+      "load",
+      () => window.Telegram?.WebApp && callback(),
+      { once: true },
+    );
+  }
+
   function initTelegram() {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
+    mark("telegram ready");
     try {
       tg.ready();
       tg.expand();
@@ -779,8 +792,7 @@
 
   async function init() {
     mark("init start");
-    initTelegram();
-    mark("telegram ready");
+    whenTelegramReady(initTelegram);
     // failsafe: never leave the user staring at the splash
     setTimeout(hideBoot, 10000);
     try {
