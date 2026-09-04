@@ -58,7 +58,26 @@
       .map(([l, mt]) => `${mt.toFixed(0).padStart(6)}ms  ${l}`)
       .join("\n");
   }
+  function dumpResourceTimings() {
+    if (!DEBUG) return;
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (nav) {
+      mark(
+        `nav: fetchStart=${nav.fetchStart.toFixed(0)} responseStart=${nav.responseStart.toFixed(0)} domInteractive=${nav.domInteractive.toFixed(0)}`,
+      );
+    }
+    performance
+      .getEntriesByType("resource")
+      .filter((r) => /telegram-web-app|styles\.css|app\.js|game\.js/.test(r.name))
+      .forEach((r) => {
+        const short = r.name.replace(location.origin, "");
+        mark(
+          `res ${short}: start=${r.startTime.toFixed(0)} dur=${r.duration.toFixed(0)}`,
+        );
+      });
+  }
   mark("app.js start");
+  dumpResourceTimings();
   const $ = (id) => document.getElementById(id);
   const canvas = $("board");
   const ctx = canvas.getContext("2d");
