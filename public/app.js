@@ -36,6 +36,29 @@
     bootHidden = true;
     document.getElementById("boot-splash")?.remove();
   }
+
+  // diagnostics: open with ?debug=1 to see load-timing milestones on-screen
+  // (useful on a phone where remote devtools aren't available)
+  const DEBUG = /(?:^|[?&])debug=1(?:&|$)/.test(location.search);
+  const bootMarks = [];
+  function mark(label) {
+    const t = performance.now();
+    bootMarks.push([label, t]);
+    if (!DEBUG) return;
+    console.log(`[boot] ${t.toFixed(0).padStart(6)}ms  ${label}`);
+    let el = document.getElementById("boot-debug");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "boot-debug";
+      el.style.cssText =
+        "position:fixed;left:0;right:0;bottom:0;z-index:999;background:rgba(0,0,0,.85);color:#7dffb0;font:11px/1.5 ui-monospace,monospace;padding:8px 10px;max-height:45vh;overflow:auto;white-space:pre;pointer-events:none;";
+      document.body.appendChild(el);
+    }
+    el.textContent = bootMarks
+      .map(([l, mt]) => `${mt.toFixed(0).padStart(6)}ms  ${l}`)
+      .join("\n");
+  }
+  mark("app.js start");
   const $ = (id) => document.getElementById(id);
   const canvas = $("board");
   const ctx = canvas.getContext("2d");
@@ -627,6 +650,7 @@
       state.game = window.ParkingGame.createGame(levelData);
       localStorage.setItem(lastIndexKey(), String(index));
       clearError();
+      mark("first level ready");
       hideBoot();
       render();
     } catch (error) {
@@ -735,11 +759,14 @@
   }
 
   async function init() {
+    mark("init start");
     initTelegram();
+    mark("telegram ready");
     // failsafe: never leave the user staring at the splash
     setTimeout(hideBoot, 10000);
     try {
       state.packs = await loadManifest();
+      mark("manifest loaded");
       if (!state.packs.length) throw new Error("Список пачек пуст");
       const saved = localStorage.getItem(packKey);
       const initialPack =
